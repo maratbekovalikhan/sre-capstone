@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ─── Lint Python ─────────────────────────────────────────────────────────
+  lint-python:
+    name: Lint Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Check linting
+        run: ruff check app/
+
+      - name: Check formatting
+        run: ruff format --check app/
+
+  # ─── Test Python ─────────────────────────────────────────────────────────
+  test-python:
+    name: Test Python
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: taskuser
+          POSTGRES_PASSWORD: testpass123
+          POSTGRES_DB: taskdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taskuser -d taskdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql+asyncpg://taskuser:testpass123@localhost:5432/taskdb"
+      REDIS_URL: "redis://localhost:6379/0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+  # ─── Lint Terraform ──────────────────────────────────────────────────────
+  lint-terraform:
+    name: Lint Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive terraform/
+
+      - name: Validate local environment
+        run: |
+          cd terraform/environments/local
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate AWS environment
+        run: |
+          cd terraform/environments/aws
+          terraform init -backend=false
+          terraform validate
+
+  # ─── Lint Kubernetes ─────────────────────────────────────────────────────
+  lint-kubernetes:
+    name: Lint Kubernetes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          wget -qO- https://github.com/yannh/kubeconform/releases/download/v0.6.6/kubeconform-linux-amd64.tar.gz \
+            | tar xzf - -C /usr/local/bin
+
+      - name: Validate manifests
+        run: kubeconform -summary -output text k8s/
+
+  # ─── Docker Build Check ─────────────────────────────────────────────────
+  docker-build-check:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: task-api:test

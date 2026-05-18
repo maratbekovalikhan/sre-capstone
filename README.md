@@ -1,6 +1,9 @@
 # SRE Capstone: Task Manager API
 
-**Team:** Alihan & Nurassyl | **Cloud:** AWS EKS | **Stack:** FastAPI + PostgreSQL + Redis + Prometheus
+![CI](https://github.com/maratbekovalikhan/sre-capstone/actions/workflows/ci.yml/badge.svg)
+![CD](https://github.com/maratbekovalikhan/sre-capstone/actions/workflows/cd.yml/badge.svg)
+
+**Team:** Alihan & Nurassyl | **Platform:** Minikube / AWS EKS | **Stack:** FastAPI + PostgreSQL + Redis + Prometheus
 
 Production-ready microservice with full observability, CI/CD, and infrastructure as code.
 
@@ -129,12 +132,33 @@ kubectl apply -f monitoring/prometheus-rule.yaml
 
 ## CI/CD
 
-GitHub Actions pipeline (`.github/workflows/ci-cd.yml`):
-1. Run tests with pytest
-2. Build Docker image and push to ECR
-3. Deploy to EKS (main branch only)
+Two GitHub Actions pipelines:
 
-Required secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+**CI** (`.github/workflows/ci.yml`) — runs on PRs and non-main branches:
+1. Lint Python (ruff)
+2. Run tests (pytest with PostgreSQL + Redis services)
+3. Lint Terraform (fmt + validate)
+4. Lint Kubernetes manifests (kubeconform)
+5. Docker build check (no push)
+
+**CD** (`.github/workflows/cd.yml`) — runs on push to main:
+1. Build & push Docker image to GHCR (`ghcr.io`)
+2. Security scan with Trivy
+3. Update image tag in K8s manifests and Terraform tfvars
+
+**Local deploy** (pull-based for Minikube):
+```bash
+# First time setup
+./scripts/setup.sh
+
+# Deploy latest image from GHCR
+./scripts/deploy.sh ghcr.io/maratbekovalikhan/sre-capstone:latest
+
+# Teardown
+./scripts/teardown.sh
+```
+
+No secrets required — uses `GITHUB_TOKEN` automatically.
 
 ## Project Structure
 

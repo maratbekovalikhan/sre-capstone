@@ -1,3 +1,5 @@
+import os
+
 import pytest_asyncio
 import redis.asyncio as aioredis
 from httpx import ASGITransport, AsyncClient
@@ -7,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.database import Base, get_db
 from app.main import app
 
-TEST_DATABASE_URL = "postgresql+asyncpg://aidarmaratbekov@localhost:5432/taskmanager"
+TEST_DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://aidarmaratbekov@localhost:5432/taskmanager",
+)
+TEST_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 test_engine = create_async_engine(TEST_DATABASE_URL, pool_size=5, max_overflow=0)
 test_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
@@ -21,7 +27,7 @@ async def setup_infra():
 
     # Patch redis_client used in main.py to one on the current event loop
     import app.main as main_module
-    test_redis = aioredis.from_url("redis://localhost:6379/0", decode_responses=True)
+    test_redis = aioredis.from_url(TEST_REDIS_URL, decode_responses=True)
     main_module.redis_client = test_redis
 
     # Also patch the engine used by /ready probe
