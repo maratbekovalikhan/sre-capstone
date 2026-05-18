@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: task-api
+  labels:
+    app.kubernetes.io/part-of: task-api
+data:
+  # Database connection string (password injected separately via Secret)
+  DATABASE_URL: "postgresql+asyncpg://taskuser:REPLACE_AT_RUNTIME@postgres-service:5432/taskdb"
+  REDIS_URL: "redis://redis-service:6379/0"
+  SIMULATE_DELAY_MS: "0"
+  SIMULATE_ERROR_RATE: "0.0"
