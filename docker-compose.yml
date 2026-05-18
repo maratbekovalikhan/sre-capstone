@@ -1,12 +1,47 @@
 services:
   app:
-    build:
-      context: ./app
-    container_name: sre-ecommerce-app
+    build: .
+    container_name: sre-taskmanager-app
     environment:
-      CPU_WORK_ITERATIONS: "30000"
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/taskmanager"
+      REDIS_URL: "redis://redis:6379/0"
+      SIMULATE_DELAY_MS: "0"
+      SIMULATE_ERROR_RATE: "0.0"
     ports:
-      - "8000:5000"
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    container_name: sre-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: taskmanager
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: sre-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -45,3 +80,6 @@ services:
       - ./monitoring/grafana/ecommerce-dashboard.json:/var/lib/grafana/dashboards/ecommerce-dashboard.json:ro
     depends_on:
       - prometheus
+
+volumes:
+  pgdata:
